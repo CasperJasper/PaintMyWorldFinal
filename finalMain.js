@@ -1,25 +1,77 @@
   'use strict';
 
+
+  var mat4 = glMatrix.mat4;
+  var mat3 = glMatrix.mat3;
+
   // Global variables that are set and used
   // across the application
   let gl;
 
   // GLSL programs
+  let phongProgram
+
   
   // VAOs for the objects
+  let kingBaseVAO, kingBodyVAO, kingTopVAO;
+
 
   // textures
 
+
+
   // rotation
- 
+
+
+  // King Chess Shapes
+  let kingBaseShape, kingBodyShape, kingTopShape;
+
+// Camera control variables
+let cameraPosition = [10, 8, 10];
+let cameraTarget = [0, 0, 0];
+let cameraUp = [0, 1, 0];
+
+
+// Lighting
+let lightPosition = [5, 10, 5];
+let lightColor = [1.0, 1.0, 1.0];
+
 //
 // create shapes and VAOs for objects.
 // Note that you will need to bindVAO separately for each object / program based
 // upon the vertex attributes found in each program
 //
 function createShapes() {
+    kingBaseShape = new Cylinder(20,20);
+    kingBodyShape = new Cylinder(20,20);
+    kingTopShape = new Sphere(20,20);
+
 }
 
+function initPrograms() {
+      // Initialize all shader programs
+    phongProgram = initProgram("phong-V", "phong-F");
+
+
+      // Set up attribute locations for Phong program
+    phongProgram.aVertexPosition = gl.getAttribLocation(phongProgram, "aVertexPosition");
+    phongProgram.aVertexNormal = gl.getAttribLocation(phongProgram, "aVertexNormal");
+    phongProgram.aTextureCoord = gl.getAttribLocation(phongProgram, "aTextureCoord");
+
+    // Set up uniform locations for Phong program
+    phongProgram.uModelViewMatrix = gl.getUniformLocation(phongProgram, "uModelViewMatrix");
+    phongProgram.uProjectionMatrix = gl.getUniformLocation(phongProgram, "uProjectionMatrix");
+    phongProgram.uNormalMatrix = gl.getUniformLocation(phongProgram, "uNormalMatrix");
+
+    phongProgram.uLightPosition = gl.getUniformLocation(phongProgram, "uLightPosition");
+    phongProgram.uLightColor = gl.getUniformLocation(phongProgram, "uLightColor");
+    phongProgram.uAmbientColor = gl.getUniformLocation(phongProgram, "uAmbientColor");
+    phongProgram.uDiffuseColor = gl.getUniformLocation(phongProgram, "uDiffuseColor");
+    phongProgram.uSpecularColor = gl.getUniformLocation(phongProgram, "uSpecularColor");
+    phongProgram.uShininess = gl.getUniformLocation(phongProgram, "uShininess");
+    phongProgram.uUseTexture = gl.getUniformLocation(phongProgram, "uUseTexture");
+    phongProgram.uSampler = gl.getUniformLocation(phongProgram, "uSampler");
+  }
 
 //
 // Here you set up your camera position, orientation, and projection
@@ -29,12 +81,140 @@ function createShapes() {
 function setUpCamera(program) {
     
     gl.useProgram (program);
-    
-    // set up your projection
-    
-    // set up your view
 
+    // Projection matrix
+    const projectionMatrix = mat4.create();
+    mat4.perspective(projectionMatrix, Math.PI/4, 1.0, 0.1, 100.0);
+    gl.uniformMatrix4fv(phongProgram.uProjectionMatrix, false, projectionMatrix);
+    
+    // Light uniforms
+    gl.uniform3fv(phongProgram.uLightPosition, lightPosition);
+    gl.uniform3fv(phongProgram.uLightColor, lightColor);
+
+    // A simple ambient term
+    gl.uniform3fv(phongProgram.uAmbientColor, [0.15, 0.15, 0.2]);
 }
+
+function bindVAO(shape, phongProgram) {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    // Positions
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(shape.points), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(phongProgram.aVertexPosition);
+    gl.vertexAttribPointer(phongProgram.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
+
+    // Normals
+    if (shape.normals && shape.normals.length > 0 && phongProgram.aVertexNormal !== -1) {
+        const nbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, nbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(shape.normals), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(phongProgram.aVertexNormal);
+        gl.vertexAttribPointer(phongProgram.aVertexNormal, 3, gl.FLOAT, false, 0, 0);
+    }
+
+    // Indices
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(shape.indices), gl.STATIC_DRAW);
+
+    gl.bindVertexArray(null);
+    return vao;
+}
+
+function createVAOs() {
+    // Create VAOs for each object with appropriate program
+    kingBaseVAO = bindVAO(kingBaseShape, phongProgram);
+    kingBodyVAO = bindVAO(kingBodyShape, phongProgram);
+    kingTopVAO  = bindVAO(kingTopShape, phongProgram);
+  }
+
+  function drawKing(position, colorType) {
+        // position = [x,y,z];
+        // colorType = black;
+
+        let diffuse, specular, shininess;
+        if (colorType == "black") {
+            diffuse = [0.08, 0.08, 0.10];
+            specular = [1.0, 1.0, 1.0];
+            shininess = 32.0;
+        } else {
+            diffuse = [0.90, 0.90, 0.95];
+            specular = [0.6, 0.6, 0.7];
+            shininess = 32.0;
+        }
+        gl.uniform3fv(phongProgram.uDiffuseColor, diffuse);
+        gl.uniform3fv(phongProgram.uSpecularColor, specular);
+        gl.uniform1f(phongProgram.uShininess, shininess);
+        gl.uniform1i(phongProgram.uUseTexture, 0);
+
+        const viewMatrix = mat4.create();
+        mat4.lookAt(viewMatrix, cameraPosition, cameraTarget, cameraUp);
+
+        // Shared set-up per part
+        const modelMatrix = mat4.create();
+        const modelViewMatrix = mat4.create();
+        const normalMatrix = mat3.create();
+
+
+
+        // Draw base of chess piece (wide, squat cylinder)
+        mat4.identity(modelMatrix);
+        mat4.translate(modelMatrix, modelMatrix, position);
+        mat4.scale(modelMatrix, modelMatrix, [1.2, 0.3, 1.2]);
+
+        mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
+        mat3.normalFromMat4(normalMatrix, modelViewMatrix);
+
+        gl.uniformMatrix4fv(phongProgram.uModelViewMatrix, false, modelViewMatrix);
+        gl.uniformMatrix3fv(phongProgram.uNormalMatrix, false, normalMatrix);
+
+        gl.bindVertexArray(kingBaseVAO);
+        gl.drawElements(gl.TRIANGLES, kingBaseShape.indices.length, gl.UNSIGNED_SHORT, 0);
+
+        // Draws body of chess piece (tall central cylinder)
+        mat4.identity(modelMatrix);
+        mat4.translate(modelMatrix, modelMatrix, [position[0], position[1] + 0.6, position[2]]);
+        mat4.scale(modelMatrix, modelMatrix, [0.6, 1.5, 0.6]);
+
+        mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
+        mat3.normalFromMat4(normalMatrix, modelViewMatrix);
+
+        gl.uniformMatrix4fv(phongProgram.uModelViewMatrix, false, modelViewMatrix);
+        gl.uniformMatrix3fv(phongProgram.uNormalMatrix, false, normalMatrix);
+
+        gl.bindVertexArray(kingBodyVAO);
+        gl.drawElements(gl.TRIANGLES, kingBodyShape.indices.length, gl.UNSIGNED_SHORT, 0);
+
+        // Draws the top (Sphere = crown)
+        mat4.identity(modelMatrix);
+        mat4.translate(modelMatrix, modelMatrix, [position[0], position[1] + 2.0, position[2]]);
+        mat4.scale(modelMatrix, modelMatrix, [0.5, 0.5, 0.5]);
+
+        mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
+        mat3.normalFromMat4(normalMatrix, modelViewMatrix);
+
+        gl.uniformMatrix4fv(phongProgram.uModelViewMatrix, false, modelViewMatrix);
+        gl.uniformMatrix3fv(phongProgram.uNormalMatrix, false, normalMatrix);
+
+        gl.bindVertexArray(kingTopVAO);
+        gl.drawElements(gl.TRIANGLES, kingTopShape.indices.length, gl.UNSIGNED_SHORT, 0);
+
+        gl.bindVertexArray(null);
+    }
+
+  function drawShapes() {
+    gl.useProgram(phongProgram);
+    setUpCamera(phongProgram);
+
+    // White king
+    drawKing([1.5, 1.0, 0], "white");
+
+    // Black king
+    drawKing([-1.5, 1.0, 0], "black");
+  }
 
 
 //
@@ -46,10 +226,10 @@ function setUpCamera(program) {
 function setUpTextures(){
     
     // flip Y for WebGL
-    gl.pixelStorei (gl.UNPACK_FLIP_Y_WEBGL, true);
-    
+
     // get some texture space from the gpu
-    
+    // Create and set up chessboard texture
+
     // load the actual image
     var worldImage = document.getElementById ('')
     worldImage.crossOrigin = "";
@@ -64,9 +244,6 @@ function setUpTextures(){
 //
 //  This function draws all of the shapes required for your scene
 //
-    function drawShapes() {
-        
-    }
 
 
   //
@@ -79,39 +256,13 @@ function setUpTextures(){
   // based on the in variables to the shaders.   This will vary from program
   // to program.
   //
-  function initPrograms() {
-      
-  }
+
 
 
   // creates a VAO and returns its ID
-  function bindVAO (shape, program) {
-      //create and bind VAO
-      let theVAO = gl.createVertexArray();
-      gl.bindVertexArray(theVAO);
-      
-      // create and bind vertex buffer
-      let myVertexBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, myVertexBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(shape.points), gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(program.aVertexPosition);
-      gl.vertexAttribPointer(program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
-      
-      // add code for any additional vertex attribute
 
-      
-      // Setting up the IBO
-      let myIndexBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, myIndexBuffer);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(shape.indices), gl.STATIC_DRAW);
 
-      // Clean
-      gl.bindVertexArray(null);
-      gl.bindBuffer(gl.ARRAY_BUFFER, null);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-      
-      return theVAO;
-  }
+
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -240,7 +391,17 @@ function getShader(id) {
     
     // create and bind your current object
     createShapes();
+
+    createVAOs();
     
     // do a draw
     draw();
+
+    // Starts Animation Loop
+    animate();
+  }
+
+  function animate() {
+    draw();
+    requestAnimationFrame(animate);
   }
