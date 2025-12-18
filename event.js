@@ -1,10 +1,12 @@
   'use strict';
 
-  function gotKey (event) {
-      
+  function gotKey (event) { return; }
+
+      /*
       const key = event.key;
       const moveSpeed = 0.5;
       const lookSpeed = 0.5;
+
 
       // Do something based on key press
       switch(key) {
@@ -32,5 +34,5 @@
       }
       // create a new shape and do a redo a draw
       draw();
-  }
+       */
   

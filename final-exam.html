@@ -241,6 +241,81 @@
             fragColor = vec4(finalColor, 1.0);
         }
     </script>
+
+    // === Sky shaders ===
+    <script id="sky-V" type="x-shader/x-vertex">
+        #version 300 es
+        in vec2 aPos;
+        in vec2 aUV;
+        out vec2 vUV;
+
+        void main() {
+            vUV = aUV;
+            gl_Position = vec4(aPos, 0.0, 1.0);
+        }
+    </script>
+    <script id="sky-F" type="x-shader/x-fragment">
+        #version 300 es
+        precision mediump float;
+        in vec2 vUV;
+        uniform sampler2D uSky;
+        out vec4 fragColor;
+
+        void main() {
+            fragColor = texture(uSky, vUV);
+        }
+    </script>
+
+    // Cloud shaders, procedural, no texture needed
+    <script id="cloud-V" type="x-shader/x-vertex">
+        #version 300 es
+        in vec2 aPos;
+        in vec2 aUV;
+        out vec2 vUV;
+
+        void main() {
+            vUV = aUV;
+            gl_Position = vec4(aPos, 0.0, 1.0);
+        }
+    </script>
+
+    <script id="cloud-F" type="x-shader/x-fragment">
+        #version 300 es
+        precision mediump float;
+        in vec2 vUV;
+
+        uniform vec2 uCenter;
+        uniform vec2 uScale;
+        uniform float uTime;
+
+        out vec4 fragColor;
+
+        float blob(vec2 p, vec2 c, float r) {
+            float d = length(p-c);
+            return smoothstep(r, r * 0.6, d);
+        }
+
+        void main() {
+            // map vUV into "cloud local space"
+            vec2 p = (vUV - uCenter) / uScale;
+            // animate slight drift
+            p.x += 0.03 * sin(uTime * 0.3);
+
+            // Build a cloud from a few soft blobs
+            float a = 0.0;
+            a += blob(p, vec2(-0.30, 0.00), 0.55);
+            a += blob(p, vec2(0.00, 0.10), 0.65);
+            a += blob(p, vec2(0.35, 0.00), 0.50);
+            a += blob(p, vec2( 0.10,-0.18), 0.45);
+
+            // Soften + clamp alpha
+            a = clamp(a - 0.6, 0.0, 1.0);
+            a = a * a;
+
+            // white cloud with alpha
+            fragColor = vec4(vec3(1.0), a * 0.75);
+        }
+    </script>
      
     <!-- Matrix library and code for standard transformations -->
     <script type="text/javascript" src="./gl-matrix-min.js"></script>
@@ -257,8 +332,9 @@
     <script type="text/javascript" src="./event.js"></script>
     
     <!-- texture images -->
-     <img id="world-texture" src="2_no_clouds_8k.png" style="display: none"> </img>
-     <img id="chessboard-texture" src="AbstractChessboard.jpg" style="display: none;">
+     <img id="sky-texture" src="2_no_clouds_8k.png" style="display: none"> </img>
+     <img id="chessboard-texture" src="ChessText2.jpg" style="display: none;">
+     <img id="ground-texture" src="AbstractChessBoard.jpg" style="display: none;">
      <img id="hex-pattern-texture" src="HexPatternAdobe.jpg" style="display: none;">
 
 
