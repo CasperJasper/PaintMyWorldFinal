@@ -1,6 +1,5 @@
   'use strict';
 
-
   var mat4 = glMatrix.mat4;
   var mat3 = glMatrix.mat3;
 
@@ -14,7 +13,7 @@
 
   
   // VAOs for the objects
-  let platformVAO, groundVAO, skyVAO;
+  let platformVAO, groundVAO, skyVAO, mountainVAO;
   let kingBaseVAO, kingBodyVAO, kingTopVAO, kingCrossVAO;
 
 
@@ -28,18 +27,23 @@
 
 
   // King Chess Shapes
-  let platformShape, groundShape;
+  let platformShape, groundShape, mountainShape;
   let kingBaseShape, kingBodyShape, kingTopShape, kingCrossShape;
 
-// Camera control variables
-let cameraPosition = [7.6, 7.4, 8.6];
-let cameraTarget = [0.0, 1.0, 0.0];
-let cameraUp = [0.0, 1.0, 0.0];
+  // Camera control variables
+  let cameraPosition = [7.6, 7.4, 8.6];
+  let cameraTarget = [0.0, 1.0, 0.0];
+  let cameraUp = [0.0, 1.0, 0.0];
+  let camYaw = 0.75;
+  let camPitch = 0.55;
+  let camRadius = 13.0;
 
 
-// Lighting
-let lightPosition = [6.0, 9.0, 4.0];
-let lightColor = [1.0, 1.0, 1.0];
+
+
+  // Lighting
+  let lightPosition = [6.0, 9.0, 4.0];
+  let lightColor = [1.0, 1.0, 1.0];
 
 //
 // create shapes and VAOs for objects.
@@ -58,7 +62,8 @@ function createShapes() {
     // initialize ground for scene
     groundShape = new Cube(20);
 
-
+    // Initialize mountain for battlefield
+    mountainShape = new Sphere(20, 20);
 }
 
 function initPrograms() {
@@ -114,10 +119,16 @@ function bindVAO(shape, phongProgram) {
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
 
+    if (!shape || !shape.points) {
+        console.error("bindVAO got bad shape:", shape);
+        return null;
+    }
+
     // Positions
     const vbo = gl.createBuffer();
+    const positions = shape.points || shape.vertices;
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(shape.points), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(phongProgram.aVertexPosition);
     gl.vertexAttribPointer(phongProgram.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
 
@@ -162,6 +173,9 @@ function createVAOs() {
 
     // Create VAO for sky/background
     skyVAO = createScreenQuadVAO(skyProgram);
+
+    // Creat VAO for Mountain field
+    mountainVAO = bindVAO(mountainShape, phongProgram);
   }
 
   function drawKing(position, colorType) {
@@ -170,13 +184,13 @@ function createVAOs() {
 
         let diffuse, specular, shininess;
         if (colorType == "black") {
-            diffuse = [0.04, 0.04, 0.04];
-            specular = [0.85, 0.85, 0.85];
-            shininess = 96.0;
+            diffuse = [0.01, 0.01, 0.01];
+            specular = [1.0, 1.0, 1.0];
+            shininess = 128.0;
         } else {
-            diffuse = [0.92, 0.92, 0.95];
-            specular = [0.55, 0.55, 0.55];
-            shininess = 48.0;
+            diffuse = [0.98, 0.98, 0.98];
+            specular = [0.85, 0.85, 0.85];
+            shininess = 64.0;
         }
         gl.uniform3fv(phongProgram.uDiffuseColor, diffuse);
         gl.uniform3fv(phongProgram.uSpecularColor, specular);
@@ -332,22 +346,56 @@ function createVAOs() {
     const modelViewMatrix = mat4.create();
     const normalMatrix = mat3.create();
 
-    // Floating board centered at y=1
-    mat4.identity(modelMatrix);
-    mat4.translate(modelMatrix, modelMatrix, [0, 0.9, 0]);
-    mat4.scale(modelMatrix, modelMatrix, [6.4, 0.45, 6.4]);
-
     mat4.lookAt(viewMatrix, cameraPosition, cameraTarget, cameraUp);
-    mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
-    mat3.normalFromMat4(normalMatrix, modelViewMatrix);
 
-    gl.uniformMatrix4fv(phongProgram.uModelViewMatrix, false, modelViewMatrix);
-    gl.uniformMatrix3fv(phongProgram.uNormalMatrix, false, normalMatrix);
+    function drawBox(y, sx, sy, sz) {
+        // Floating board centered at y=1
+        mat4.identity(modelMatrix);
+        mat4.translate(modelMatrix, modelMatrix, [0, y, 0]);
+        mat4.scale(modelMatrix, modelMatrix, [sx, sy, sz]);
 
-    gl.bindVertexArray(platformVAO);
-    gl.drawElements(gl.TRIANGLES, platformShape.indices.length, gl.UNSIGNED_SHORT, 0);
+        mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
+        mat3.normalFromMat4(normalMatrix, modelViewMatrix);
 
+        gl.uniformMatrix4fv(phongProgram.uModelViewMatrix, false, modelViewMatrix);
+        gl.uniformMatrix3fv(phongProgram.uNormalMatrix, false, normalMatrix);
+
+        gl.bindVertexArray(platformVAO);
+        gl.drawElements(gl.TRIANGLES, platformShape.indices.length, gl.UNSIGNED_SHORT, 0);
+    }
+
+    // ---------- 1) Bottom base (dark) ----------
     // Turn texture off after (so kings aren't textured)
+    gl.uniform1i(phongProgram.uUseTexture, 0);
+    gl.uniform3fv(phongProgram.uDiffuseColor, [0.10, 0.10, 0.10]);
+    gl.uniform3fv(phongProgram.uSpecularColor, [0.20, 0.20, 0.20]);
+    gl.uniform1f(phongProgram.uShininess, 12.0);
+
+    drawBox(0.82, 6.80, 0.45, 6.80);
+
+    // ---------- 2) Bevel/rim (slightly lighter + shinier) ----------
+    gl.uniform1i(phongProgram.uUseTexture, 0);
+    gl.uniform3fv(phongProgram.uDiffuseColor, [0.30, 0.30, 0.30]);
+    gl.uniform3fv(phongProgram.uSpecularColor, [0.75, 0.75, 0.75]);
+    gl.uniform1f(phongProgram.uShininess, 56.0);
+
+    drawBox(1.00, 6.45, 0.16, 6.45);
+
+    // ---------- 3) Top surface (textured checkerboard) ----------
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, chessboardTexture);
+    gl.uniform1i(phongProgram.uSampler, 0);
+    gl.uniform1i(phongProgram.uUseTexture, 1);
+
+    // Keep diffuse white so texture stays true
+    gl.uniform3fv(phongProgram.uDiffuseColor, [1.0, 1.0, 1.0]);
+    gl.uniform3fv(phongProgram.uSpecularColor, [0.25, 0.25, 0.25]);
+    gl.uniform1f(phongProgram.uShininess, 10.0);
+
+    // Slightly above rim to avoid z-fighting
+    drawBox(1.10, 6.20, 0.08, 6.20);
+
+    // Texture off for kings after
     gl.uniform1i(phongProgram.uUseTexture, 0);
   }
 
@@ -429,9 +477,59 @@ function createVAOs() {
     return vao;
   }
 
+  function drawMountains() {
+    gl.useProgram(phongProgram);
+
+    // Use checker texture on mountains
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, groundTexture);
+    gl.uniform1i(phongProgram.uSampler, 0);
+    gl.uniform1i(phongProgram.uUseTexture, 1);
+
+    // Matte-ish so it's read as terrain
+    gl.uniform3fv(phongProgram.uDiffuseColor, [0.7, 0.7, 0.7]);
+    gl.uniform3fv(phongProgram.uSpecularColor, [0.0, 0.0, 0.0]);
+    gl.uniform1f(phongProgram.uShininess, 1.0);
+
+    const viewMatrix = mat4.create();
+    mat4.lookAt(viewMatrix, cameraPosition, cameraTarget, cameraUp);
+
+    const modelMatrix = mat4.create();
+    const modelViewMatrix = mat4.create();
+    const normalMatrix = mat3.create();
+
+
+    function drawMountain(tx, ty, tz, sx, sy, sz) {
+
+        mat4.identity(modelMatrix);
+        mat4.translate(modelMatrix, modelMatrix, [tx, ty, tz]);
+        mat4.scale(modelMatrix, modelMatrix, [sx, sy, sz]);
+
+        mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
+        mat3.normalFromMat4(normalMatrix, modelViewMatrix);
+
+        gl.uniformMatrix4fv(phongProgram.uModelViewMatrix, false, modelViewMatrix);
+        gl.uniformMatrix3fv(phongProgram.uNormalMatrix, false, normalMatrix);
+
+        gl.bindVertexArray(mountainVAO);
+        gl.drawElements(gl.TRIANGLES, mountainShape.indices.length, gl.UNSIGNED_SHORT, 0);
+    }
+    drawMountain(-20, -7.5, -60, 20, 3.5, 20);
+    drawMountain(0, -8.0, -72, 26, 4.0, 26);
+    drawMountain(22, -7.5, -58, 18, 3.0, 18);
+
+    drawMountain(-40, -9.0, -90, 34, 4.5, 34);
+    drawMountain( 45, -9.0, -95, 36, 5.0, 36);
+
+    // Texture off
+    gl.uniform1i(phongProgram.uUseTexture, 0);
+  }
+
   function drawShapes() {
     gl.useProgram(phongProgram);
     setUpCamera(phongProgram);
+
+    drawMountains();
 
     drawGround();
     drawPlatform();
@@ -534,7 +632,7 @@ function loadSkyTexture() {
     else img.onload = upload;
 }
 
-function drawSkyAndClouds(timeSeconds) {
+function drawSkyAndClouds(t) {
     // Draw behind everything
     gl.disable(gl.DEPTH_TEST);
 
@@ -555,7 +653,7 @@ function drawSkyAndClouds(timeSeconds) {
     gl.useProgram(cloudProgram);
     gl.bindVertexArray(skyVAO);
 
-    gl.uniform1f(gl.getUniformLocation(cloudProgram, "uTime"), timeSeconds);
+    gl.uniform1f(gl.getUniformLocation(cloudProgram, "uTime"), t);
 
     // A few clouds
     const setCloud = (cx, cy, sx, sy) => {
@@ -573,6 +671,16 @@ function drawSkyAndClouds(timeSeconds) {
     // restore for 3d scene
     gl.enable(gl.DEPTH_TEST);
 }
+
+function syncCameraOrbitFromCurrent() {
+    const dx = cameraPosition[0] - cameraTarget[0];
+    const dy = cameraPosition[1] - cameraTarget[1];
+    const dz = cameraPosition[2] - cameraTarget[2];
+    camRadius = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    camYaw = Math.atan2(dx, dz);
+    camPitch = Math.asin(dy / camRadius);
+}
+
 
 //
 //  This function draws all of the shapes required for your scene
@@ -673,6 +781,9 @@ function getShader(id) {
     // Clear the scene
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+    const t = performance.now() * 0.001;
+    drawSkyAndClouds(t);
       
     // draw your shapes
     drawShapes();
@@ -694,7 +805,7 @@ function getShader(id) {
     }
 
     // deal with keypress
-    window.addEventListener('keydown', gotKey ,false);
+    window.addEventListener('keydown', gotKey, false);
 
     // Retrieve a WebGL context
     gl = canvas.getContext('webgl2');
@@ -731,9 +842,6 @@ function getShader(id) {
 
     loadSkyTexture();
 
-    const t = performance.now() * 0.001;
-    drawSkyAndClouds(t);
-    drawShapes();
     // do a draw
     draw();
 

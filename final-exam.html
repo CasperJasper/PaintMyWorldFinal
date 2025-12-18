@@ -1,6 +1,6 @@
 <html>
 <head>
-    <title>CSCI-610 -- Final Exam</title>
+    <title>COMP-3420 -- Final Exam</title>
     
     <!-- include vertex shaders -->
 
@@ -103,6 +103,8 @@
 
             // Combine
             vec3 finalColor = surfaceColor * (ambient + diffuse) + specular;
+            float levels = 3.0;
+            surfaceColor = floor(surfaceColor * levels) / levels;
             fragColor = vec4(finalColor, 1.0);
          }
      </script>
@@ -242,7 +244,7 @@
         }
     </script>
 
-    // === Sky shaders ===
+    <!-- === Sky shaders === -->
     <script id="sky-V" type="x-shader/x-vertex">
         #version 300 es
         in vec2 aPos;
@@ -266,7 +268,7 @@
         }
     </script>
 
-    // Cloud shaders, procedural, no texture needed
+    <!-- Cloud shaders, procedural, no texture needed -->
     <script id="cloud-V" type="x-shader/x-vertex">
         #version 300 es
         in vec2 aPos;
@@ -299,7 +301,7 @@
             // map vUV into "cloud local space"
             vec2 p = (vUV - uCenter) / uScale;
             // animate slight drift
-            p.x += 0.03 * sin(uTime * 0.3);
+            p.x += mod(uTime * 0.08, 2.0) - 1.0; // steady drift to the right
 
             // Build a cloud from a few soft blobs
             float a = 0.0;
@@ -309,11 +311,11 @@
             a += blob(p, vec2( 0.10,-0.18), 0.45);
 
             // Soften + clamp alpha
-            a = clamp(a - 0.6, 0.0, 1.0);
-            a = a * a;
+            a = clamp(a - 0.45, 0.0, 1.0);
+            a = smoothstep(0.0, 1.0, a);
 
             // white cloud with alpha
-            fragColor = vec4(vec3(1.0), a * 0.75);
+            fragColor = vec4(vec3(1.0), a * 0.65);
         }
     </script>
      
@@ -408,7 +410,7 @@
 </head>
 
 <body>
-  <h1>CSCI-610: Final Exam Image</h1>
+  <h1>COMP-3420: Final Exam Image</h1>
   <table>
       <tr>
           <td><canvas id="webgl-canvas" width="500" height="500">
@@ -424,26 +426,9 @@
                       <span class="key">W</span> / <span class="key">S</span> - Move forward/Back<br>
                       <span class="key">A</span> / <span class="key">D</span> - Strafe left/right<br>
                       <span class="key">Q</span> / <span class="key">E</span> - Move up/down<br>
-                      <span class="key">G</span> / <span class="key">H</span> - Look up/down<br>
+                      <span class="key">ArrowUp</span> / <span class="key">ArrowDown</span> - Look up/down<br>
                       <span class="key">Y</span> / <span class="key">U</span> - Look left/right
                   </div>
-              </div>
-
-              <div class="section-title">Scene Controls</div>
-              <div class="description">
-                  <span class="key">1</span> - Toggle platforms texture<br>
-                  <span class="key">2</span> - Toggle ground shader<br>
-                  <span class="key">3</span> - Toggle portal animation<br>
-                  <span class="key">4</span> - Toggle orb rotation<br>
-                  <span class="key">L</span> - Toggle lighting<br>
-                  <span class="key">R</span> - Reset camera<br>
-                  <span class="key">+</span> / <span class="key">-</span> - Adjust grid size
-              </div>
-
-              <div class="section-title">Visual Effects</div>
-              <div class="description">
-                  <span class="key">TAB</span> - Cycles shader modes<br>
-                  <span class="key">SPACE</span> - Pause/resume animation<br>
               </div>
           </td>
       </tr>
